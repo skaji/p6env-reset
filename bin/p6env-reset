@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use File::Path 'rmtree';
+
+my $arg = shift;
+if (!$arg || $arg =~ /^(-h|--help)$/) {
+    die "Usage: p6env reset [version]\n";
+}
+
+my $root = $ENV{P6ENV_ROOT} || "$ENV{HOME}/.p6env";
+chdir "$root/versions" or die;
+
+# Provide p6env completions
+if ($arg eq "--complete") {
+    my %found;
+    for my $entry (glob "*") {
+        if ($entry =~ /(.*)\.tar\.(?:gz|xz)$/) {
+            $found{$1}{tarball} = 1;
+        } elsif (-d $entry) {
+            $found{$entry}{version} = 1;
+        }
+    }
+    my @version = grep { keys %{$found{$_}} > 1 } keys %found;
+    print "$_\n" for sort @version;
+    exit;
+}
+
+my $version = $arg;
+if ($version eq "-") {
+    open my $fh, "<", "$root/version" or die "$!: $root/version\n";
+    $version = <$fh>;
+    chomp $version;
+}
+die "$version is not installed.\n" unless -d $version;
+my $tarball;
+for my $suffix (qw(xz gz)) {
+    my $try = "$version.tar.$suffix";
+    if (-f $try) {
+        $tarball = $try, last;
+    }
+}
+die "Missing $version\'s tarball\n" unless $tarball;
+
+rmtree $version or die;
+system "tar", "xf", $tarball;
+
+if ($? == 0 and -d $version) {
+    warn "Reset $version\n";
+} else {
+    die "Something wrong!";
+}
